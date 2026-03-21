@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  test:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.11"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install core dependencies
+        run: pip install requests beautifulsoup4 pytest pytest-mock
+
+      - name: Install package (editable, no optional deps)
+        run: pip install -e . --no-deps
+
+      - name: Verify entry points compile
+        run: |
+          python -m py_compile downloader.py
+          python -m py_compile qa/qa_downloader.py
+          python -m py_compile qa/qa_unlock.py
+
+      - name: Run tests
+        run: pytest tests/ -v --tb=short --ignore=tests/test_imports.py
+        env:
+          PYTHONPATH: src
+
+      - name: Run import smoke test
+        run: pytest tests/test_imports.py -v --tb=short
+        env:
+          PYTHONPATH: src
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install ruff
+        run: pip install ruff
+      - name: Lint
+        run: ruff check src/ tests/ downloader.py

@@ -1,0 +1,48 @@
+{
+  "site": {
+    "kind": "generic",
+    "base_url": "https://example.com",
+    "target_uid": "YOUR_TARGET_UID",
+    "api_paths": {
+      "profile":      "/ajax/profile/info?uid={uid}",
+      "articles":     "/ajax/statuses/articles?uid={uid}&page={page}&feature=10",
+      "article_page": "/article/p/show?id={article_id}",
+      "qa_page":      "/p/{qa_id}"
+    }
+  },
+
+  "auth": {
+    "mode": "browser_auto",
+    "browser": "auto",
+    "cookie_domains": ["example.com"],
+    "required_cookies": ["SESSION"],
+    "xsrf_cookie_names": ["XSRF-TOKEN", "XSRF_TOKEN"]
+  },
+
+  "cookies": {
+    "SESSION": "",
+    "XSRF-TOKEN": ""
+  },
+
+  "network": {
+    "proxy": null,
+    "request_timeout": 20,
+    "connect_timeout": 10,
+    "max_retries": 3,
+    "delay_between_pages": 1,
+    "delay_between_items": 2
+  },
+
+  "output": {
+    "root_dir": "./output",
+    "qa_dir": "./qa/output",
+    "download_images": true,
+    "save_html": true,
+    "save_text": true
+  },
+
+  "safety": {
+    "allowed_base_domains": [],
+    "authorized_use_only": true
+  }
+}

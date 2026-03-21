@@ -1,0 +1,20 @@
+{
+  "data": {
+    "list": [
+      {
+        "id": "post_qa_001",
+        "created_at": "2026-03-20T10:00:00+0800",
+        "text_raw": "QA summary",
+        "user": { "screen_name": "testuser" },
+        "page_info": {
+          "object_type": "wenda",
+          "page_id": "qa_xyz789",
+          "content1": "What is the meaning of life?",
+          "content3": "questioner_name",
+          "content2": "Free",
+          "page_desc": "What is the meaning of life?"
+        }
+      }
+    ]
+  }
+}

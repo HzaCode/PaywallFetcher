@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "paywallfetcher"
+version = "1.1.0"
+description = "Authorized content retrieval skill for OpenClaw — fetch articles and Q&A using the logged-in browser session."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.8"
+dependencies = [
+    "requests>=2.28.0",
+    "beautifulsoup4>=4.12.0",
+]
+
+[project.optional-dependencies]
+browser-auth = [
+    "browser-cookie3>=0.20.1",
+]
+browser-assist = [
+    "playwright>=1.40.0",
+]
+all = [
+    "browser-cookie3>=0.20.1",
+    "playwright>=1.40.0",
+]
+dev = [
+    "pytest>=7.4",
+    "pytest-mock>=3.12",
+    "ruff>=0.4",
+    "mypy>=1.8",
+]
+
+[project.scripts]
+paywallfetcher = "paywallfetcher.cli:run"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["E402"]
+
+[tool.mypy]
+python_version = "3.8"
+warn_unused_ignores = true
+ignore_missing_imports = true
