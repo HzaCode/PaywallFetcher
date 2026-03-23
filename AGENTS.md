@@ -18,10 +18,13 @@ Use it when an agent must:
 - **Repository landing page**: README.md
 - **Config template**: config.example.json
 - **Workspace-specific config**: TOOLS.md
-- **Article fetcher**: downloader.py
-- **Q&A fetcher**: qa/qa_downloader.py
-- **Q&A browser-assist**: qa/qa_unlock.py
-- **Auth layer**: auth_utils.py
+- **Core package**: src/paywallfetcher/
+- **CLI entrypoint**: `py -m paywallfetcher`
+- **Auth layer**: src/paywallfetcher/auth.py
+
+> Legacy wrapper scripts (`downloader.py`, `qa/qa_downloader.py`, `qa/qa_unlock.py`,
+> `auth_utils.py`) remain for backward compatibility but are not canonical.
+> Prefer `py -m paywallfetcher` for all new agent tasks.
 
 ## Agent operating assumptions
 

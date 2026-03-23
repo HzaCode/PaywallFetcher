@@ -67,6 +67,67 @@ Create a daily cron job at 09:00 that runs:
 Set the working directory to this workspace.
 ```
 
+## OpenClaw-native credential configuration
+
+This skill supports env-based credential injection. The preferred path for
+OpenClaw users is to configure credentials via `skills.entries` rather than
+editing `config.json` directly.
+
+Add this to your `openclaw.json`:
+
+```json
+{
+  "skills": {
+    "entries": {
+      "paywall_fetcher": {
+        "apiKey": {
+          "source": "env",
+          "provider": "default",
+          "id": "PAYWALLFETCHER_TOKEN"
+        },
+        "env": {
+          "PAYWALLFETCHER_BASE_URL": "https://target.example",
+          "PAYWALLFETCHER_TARGET_UID": "YOUR_TARGET_UID"
+        }
+      }
+    }
+  }
+}
+```
+
+Then set the token env var (cookie string format):
+
+```
+PAYWALLFETCHER_TOKEN="SESSION=<value>; XSRF-TOKEN=<value>"
+```
+
+Or inject individual cookies:
+
+```
+PAYWALLFETCHER_COOKIE_SESSION=<value>
+PAYWALLFETCHER_COOKIE_XSRF-TOKEN=<value>
+```
+
+> **Note**: The Python CLI reads `PAYWALLFETCHER_TOKEN` and
+> `PAYWALLFETCHER_COOKIE_*` env vars directly. It does **not** auto-read
+> `skills.entries.*.config` from `openclaw.json` — OpenClaw injects those
+> values into the process environment before the CLI runs.
+
+Generate a ready-to-paste snippet at any time:
+
+```powershell
+py -m paywallfetcher auth print-openclaw-snippet
+```
+
+### Credential priority order
+
+| Priority | Source | How to supply |
+|---|---|---|
+| 1 | `env_token` | `PAYWALLFETCHER_TOKEN` env var |
+| 2 | `env_cookie_header` | `PAYWALLFETCHER_COOKIE_<NAME>` env vars |
+| 3 | `browser_auto` | logged-in Chrome or Edge session |
+| 4 | `config_cookies` | `cookies` in `config.json` — debug-only, do not commit |
+
 ## Capability map
 
 | Capability | Preferred command | Transport |

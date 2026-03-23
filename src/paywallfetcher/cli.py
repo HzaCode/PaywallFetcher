@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from typing import Any, Dict, List, Optional
 
 from . import __version__
@@ -91,6 +92,10 @@ def _add_auth_commands(sub: Any) -> None:
     g = sub.add_parser("auth", help="Authentication commands")
     gs = g.add_subparsers(dest="action", metavar="ACTION")
     gs.add_parser("check", help="Verify browser session cookies are available")
+    gs.add_parser(
+        "print-openclaw-snippet",
+        help="Print an openclaw.json skills.entries snippet for this skill",
+    )
 
 
 def _add_doctor_command(sub: Any) -> None:
@@ -143,6 +148,7 @@ def _dispatch(args: argparse.Namespace, emit_json: bool) -> int:
 
     cfg = config_mod.load(args.config)
     cfg = auth_mod.resolve(cfg)
+    _emit_warnings(cfg, emit_json)
 
     if args.group == "article":
         return _cmd_article(args, cfg, emit_json)
@@ -371,11 +377,23 @@ def _cmd_auth(args: argparse.Namespace, emit_json: bool) -> int:
     from . import auth as auth_mod
     from . import config as config_mod
 
+    action = args.action or "check"
+
+    if action == "print-openclaw-snippet":
+        return _cmd_auth_snippet(emit_json)
+
     cfg = config_mod.load(args.config)
     cfg = auth_mod.resolve(cfg)
+    _emit_warnings(cfg, emit_json)
     result = auth_mod.doctor_auth(cfg)
     result["base_domain"] = cfg["base_url"]
     result["proxy"] = auth_mod.redact_proxy(cfg.get("proxy"))
+    result["candidate_sources"] = ["env_token", "env_cookie_header", "browser_auto", "config_cookies"]
+    result["missing_env"] = [
+        auth_mod.ENV_TOKEN_VAR
+        if os.environ.get(auth_mod.ENV_TOKEN_VAR) is None else None
+    ]
+    result["missing_env"] = [v for v in result["missing_env"] if v is not None]
 
     if emit_json:
         print(json.dumps(result))
@@ -387,8 +405,46 @@ def _cmd_auth(args: argparse.Namespace, emit_json: bool) -> int:
         print(f"  XSRF found  : {result['xsrf_found']}")
         if result["required_cookies_missing"]:
             print(f"  Missing     : {', '.join(result['required_cookies_missing'])}")
+        if result["missing_env"]:
+            print(f"  Missing env : {', '.join(result['missing_env'])}")
 
     return 0 if result["ok"] else 30
+
+
+def _cmd_auth_snippet(emit_json: bool) -> int:
+    from . import auth as auth_mod
+    from . import __version__
+
+    skill_name = "paywall_fetcher"
+    env_var = auth_mod.ENV_TOKEN_VAR
+    snippet = {
+        "skills": {
+            "entries": {
+                skill_name: {
+                    "apiKey": {
+                        "source": "env",
+                        "provider": "default",
+                        "id": env_var,
+                    },
+                    "env": {
+                        "PAYWALLFETCHER_BASE_URL": "https://target.example",
+                        "PAYWALLFETCHER_TARGET_UID": "YOUR_TARGET_UID",
+                    },
+                }
+            }
+        }
+    }
+    if emit_json:
+        print(json.dumps(snippet))
+    else:
+        print(f"\n# Add this to your openclaw.json (skill: {skill_name} v{__version__})")
+        print(json.dumps(snippet, indent=2))
+        print(f"\n# Then set the env var:")
+        print(f"#   {env_var}=\"SESSION=<value>; XSRF-TOKEN=<value>\"")
+        print(f"#\n# Or inject individual cookies:")
+        print(f"#   PAYWALLFETCHER_COOKIE_SESSION=<value>")
+        print(f"#   PAYWALLFETCHER_COOKIE_XSRF-TOKEN=<value>")
+    return 0
 
 
 # ── doctor ─────────────────────────────────────────────────────────────────
@@ -529,6 +585,14 @@ def _cmd_state(args: argparse.Namespace, emit_json: bool) -> int:
 
 
 # ── shared helpers ─────────────────────────────────────────────────────────
+
+def _emit_warnings(config: Dict[str, Any], emit_json: bool) -> None:
+    """Print any auth warnings to stderr. In JSON mode warnings are suppressed."""
+    if emit_json:
+        return
+    for w in config.get("_warnings", []):
+        print(f"[Warn] {w}", file=sys.stderr)
+
 
 def _print_banner(config: Dict[str, Any]) -> None:
     from .auth import redact_proxy

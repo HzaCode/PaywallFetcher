@@ -1,14 +1,19 @@
 """Authentication layer.
 
-Resolves browser session cookies from Chrome / Edge automatically.
-Falls back to manually configured cookies only after browser auth failure.
-Proxy credentials are redacted from all log output.
+Priority order for credential resolution:
+  1. env_token        — PAYWALLFETCHER_TOKEN env var (cookie string or bearer token)
+  2. env_cookie_header — PAYWALLFETCHER_COOKIE_<NAME> env vars (individual cookies)
+  3. browser_auto     — local Chrome / Edge logged-in session
+  4. config_cookies   — cookies field in config.json (debug-only fallback)
+
+resolve() never prints. All warnings are stored in config['_warnings'] and
+emitted by the caller (cli.py) according to output mode.
 """
 
 from __future__ import annotations
 
+import os
 import re
-import sys
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
@@ -26,9 +31,17 @@ except ImportError:
 _DEFAULT_BROWSER_ORDER = ("chrome", "edge")
 _DEFAULT_XSRF_NAMES = ("XSRF-TOKEN", "XSRF_TOKEN", "xsrf-token", "x-xsrf-token", "_xsrf")
 
+ENV_TOKEN_VAR = "PAYWALLFETCHER_TOKEN"
+ENV_COOKIE_PREFIX = "PAYWALLFETCHER_COOKIE_"
+
 
 def resolve(config: Dict[str, Any]) -> Dict[str, Any]:
-    """Resolve auth and inject _auth_source / _cookie_records / _cookies / _xsrf_token into config."""
+    """Resolve auth. Never prints. Warnings are stored in config['_warnings'].
+
+    Injects into config:
+      _auth_source, _cookie_records, _cookies, _xsrf_token, _warnings
+    """
+    warnings: List[str] = []
     auth = config.get("auth", {})
     mode = (auth.get("mode") or "browser_auto").lower()
 
@@ -36,43 +49,62 @@ def resolve(config: Dict[str, Any]) -> Dict[str, Any]:
     xsrf_names = auth.get("xsrf_cookie_names") or list(_DEFAULT_XSRF_NAMES)
     required = auth.get("required_cookies") or []
 
-    manual = _manual_records(config)
-    browser_records: List[Dict] = []
-    browser_name: Optional[str] = None
-    browser_errors: List[str] = []
-
-    if mode in {"browser", "browser_auto"}:
-        browser_records, browser_name, browser_errors = _load_browser_records(
-            auth.get("browser", "auto"), cookie_domains
-        )
-
-    if browser_records:
-        records = _merge(manual, browser_records)
-        config["_auth_source"] = f"browser:{browser_name}"
-    elif manual:
-        records = manual
-        config["_auth_source"] = "config"
-        if mode in {"browser", "browser_auto"} and browser_errors:
-            print(f"[Warn] Browser auth unavailable, using config cookies: {' | '.join(browser_errors)}", file=sys.stderr)
-    elif mode == "config":
-        raise AuthError("No cookies found in config.json under 'cookies'.")
+    # ── Priority 1: env_token ──────────────────────────────────────────────
+    records = _env_token_records(config)
+    if records:
+        config["_auth_source"] = "env_token"
     else:
-        detail = " | ".join(browser_errors) if browser_errors else "No matching cookies in local browser profiles."
-        raise AuthError(
-            f"Failed to load browser cookies automatically. {detail}\n"
-            "  Ensure you are already logged into the target site in Chrome or Edge."
-        )
+        # ── Priority 2: env_cookie_header ──────────────────────────────────
+        records = _env_cookie_records(config)
+        if records:
+            config["_auth_source"] = "env_cookie_header"
+        else:
+            # ── Priority 3: browser_auto ───────────────────────────────────
+            manual = _manual_records(config)
+            browser_records: List[Dict] = []
+            browser_name: Optional[str] = None
+            browser_errors: List[str] = []
+
+            if mode in {"browser", "browser_auto"}:
+                browser_records, browser_name, browser_errors = _load_browser_records(
+                    auth.get("browser", "auto"), cookie_domains
+                )
+
+            if browser_records:
+                records = _merge(manual, browser_records)
+                config["_auth_source"] = f"browser:{browser_name}"
+            elif manual:
+                # ── Priority 4: config_cookies (debug-only) ────────────────
+                records = manual
+                config["_auth_source"] = "config_cookies"
+                if mode in {"browser", "browser_auto"} and browser_errors:
+                    warnings.append(
+                        f"Browser auth unavailable, falling back to config cookies "
+                        f"(debug-only): {' | '.join(browser_errors)}"
+                    )
+            elif mode == "config":
+                raise AuthError("No cookies found in config.json under 'cookies'.")
+            else:
+                detail = " | ".join(browser_errors) if browser_errors else "No matching cookies in local browser profiles."
+                raise AuthError(
+                    f"Failed to load browser cookies automatically. {detail}\n"
+                    "  Ensure you are already logged into the target site in Chrome or Edge.\n"
+                    f"  Alternatively, set {ENV_TOKEN_VAR} or {ENV_COOKIE_PREFIX}<NAME> env vars."
+                )
 
     cookies_dict = {r["name"]: r["value"] for r in records}
     xsrf = _find_xsrf(cookies_dict, xsrf_names)
 
     missing = [n for n in required if n not in cookies_dict]
     if missing and config.get("_auth_source", "").startswith("browser"):
-        print(f"[Warn] Browser auth loaded but missing required cookies: {', '.join(missing)}", file=sys.stderr)
+        warnings.append(
+            f"Browser auth loaded but missing required cookies: {', '.join(missing)}"
+        )
 
     config["_cookie_records"] = records
     config["_cookies"] = cookies_dict
     config["_xsrf_token"] = xsrf
+    config["_warnings"] = warnings
     return config
 
 
@@ -162,6 +194,65 @@ def doctor_auth(config: Dict[str, Any]) -> Dict[str, Any]:
     result["required_cookies_missing"] = [n for n in required if n not in cookies_dict]
     result["ok"] = not result["required_cookies_missing"]
     return result
+
+
+# ── env credential helpers ─────────────────────────────────────────────────
+
+
+def _env_token_records(config: Dict[str, Any]) -> List[Dict]:
+    """Parse PAYWALLFETCHER_TOKEN env var into cookie records.
+
+    Accepts a semicolon-separated cookie string: ``SESSION=abc; XSRF-TOKEN=xyz``
+    Each ``NAME=value`` pair becomes one cookie record bound to the config host.
+    Returns an empty list if the env var is unset or empty.
+    """
+    token = os.environ.get(ENV_TOKEN_VAR, "").strip()
+    if not token:
+        return []
+
+    host = _normalize_domain(urlparse(config["base_url"]).netloc.split(":")[0])
+    domain = f".{host}" if host else None
+
+    records: List[Dict] = []
+    for part in token.split(";"):
+        part = part.strip()
+        if "=" not in part:
+            continue
+        name, _, value = part.partition("=")
+        name = name.strip()
+        value = value.strip()
+        if name:
+            records.append({
+                "name": name, "value": value,
+                "domain": domain, "path": "/",
+                "secure": True, "expires": None,
+            })
+    return records
+
+
+def _env_cookie_records(config: Dict[str, Any]) -> List[Dict]:
+    """Collect PAYWALLFETCHER_COOKIE_<NAME>=value env vars as cookie records.
+
+    Each env var whose name starts with ``PAYWALLFETCHER_COOKIE_`` contributes
+    one cookie; the cookie name is the suffix after the prefix.
+    Returns an empty list if no matching env vars are set.
+    """
+    host = _normalize_domain(urlparse(config["base_url"]).netloc.split(":")[0])
+    domain = f".{host}" if host else None
+
+    records: List[Dict] = []
+    for key, value in os.environ.items():
+        if not key.startswith(ENV_COOKIE_PREFIX):
+            continue
+        name = key[len(ENV_COOKIE_PREFIX):]
+        value = value.strip()
+        if name and value:
+            records.append({
+                "name": name, "value": value,
+                "domain": domain, "path": "/",
+                "secure": True, "expires": None,
+            })
+    return records
 
 
 # ── internals ──────────────────────────────────────────────────────────────

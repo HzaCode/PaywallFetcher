@@ -19,11 +19,6 @@
     "xsrf_cookie_names": ["XSRF-TOKEN", "XSRF_TOKEN"]
   },
 
-  "cookies": {
-    "SESSION": "",
-    "XSRF-TOKEN": ""
-  },
-
   "network": {
     "proxy": null,
     "request_timeout": 20,

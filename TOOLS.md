@@ -16,7 +16,7 @@ Edit this file when you set up PaywallFetcher for a specific target site.
 | Site kind | (set `site.kind` in config.json — e.g., `generic`) |
 | Base URL | (set `site.base_url` in config.json) |
 | Target UID | (set `site.target_uid` in config.json) |
-| Auth mode | `browser_auto` (reads Chrome or Edge session) |
+| Auth mode | `browser_auto` / `env_token` / `env_cookie_header` (see Credentials below) |
 | Output root | `./output` |
 | Q&A output | `./qa/output` |
 
@@ -37,14 +37,25 @@ Override these under `site.api_paths` in `config.json` if the target site uses d
 
 ---
 
-## Required cookies
+## Credentials
 
-Populate these under `cookies` in `config.json` as a fallback if browser auth is unavailable:
+Preferred resolution order (highest priority first):
 
-- `SESSION`
-- `XSRF-TOKEN`
+1. **`PAYWALLFETCHER_TOKEN` env var** — cookie string injected by OpenClaw `apiKey`:
+   ```
+   PAYWALLFETCHER_TOKEN="SESSION=<value>; XSRF-TOKEN=<value>"
+   ```
+2. **`PAYWALLFETCHER_COOKIE_<NAME>` env vars** — individual cookie injection:
+   ```
+   PAYWALLFETCHER_COOKIE_SESSION=<value>
+   ```
+3. **Browser session (`browser_auto`)** — reads logged-in Chrome or Edge automatically.
+4. **`config.json` cookies** — debug-only fallback. See `config.debug-cookies.example.json`.
 
-Preferred: keep `auth.mode = browser_auto` and stay logged in through Chrome or Edge.
+> **Do not store production cookies in tracked files.**
+> Do not paste secrets into issues, artifacts, or screenshots.
+
+Run `py -m paywallfetcher auth print-openclaw-snippet` to generate the OpenClaw config snippet.
 
 ---
 

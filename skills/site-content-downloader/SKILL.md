@@ -4,7 +4,7 @@ version: "1.1.0"
 description: Fetch articles and Q&A from the configured target site using the logged-in browser session. Do not ask the user to copy cookies. Supports one-off download, incremental polling, and scheduled collection via OpenClaw cron or Windows Task Scheduler.
 user-invocable: true
 tags: ["content-fetching", "browser-auth", "windows", "polling", "scheduled"]
-metadata: {"openclaw":{"emoji":"📰","homepage":"https://github.com/HzaCode/PaywallFetcher","os":["win32"],"requires":{"anyBins":["py","python"]}}}
+metadata: {"openclaw":{"emoji":"📰","homepage":"https://github.com/HzaCode/PaywallFetcher","os":["win32"],"requires":{"anyBins":["py","python"]},"primaryEnv":"PAYWALLFETCHER_TOKEN","skillKey":"paywall_fetcher"}}
 ---
 
 # PaywallFetcher
@@ -82,10 +82,18 @@ Treat this repository as an agent-operated workspace for:
 
 ## Flag reference
 
-> **Important**: `--json` and `--config FILE` are **global flags** that must appear **before** the subcommand.
-> Correct: `py -m paywallfetcher --json article fetch --new-only`
-> Correct: `py -m paywallfetcher --config path/config.json article fetch`
-> Wrong:   `py -m paywallfetcher article fetch --new-only --json`
+### Global flags (must appear before the subcommand)
+
+| Flag | Type | Description |
+|---|---|---|
+| `--json` | bool | Machine-readable JSON output — must precede the subcommand |
+| `--config FILE` | str | Path to config file — must precede the subcommand |
+
+```
+Correct: py -m paywallfetcher --json article fetch --new-only
+Correct: py -m paywallfetcher --config path/config.json article fetch
+Wrong:   py -m paywallfetcher article fetch --new-only --json
+```
 
 ### `py -m paywallfetcher article fetch`
 
@@ -96,8 +104,6 @@ Treat this repository as an agent-operated workspace for:
 | `--no-images` | bool | Skip image downloads |
 | `--dry-run` | bool | List without saving |
 | `--fail-on-empty` | bool | Exit 10 if no new content in incremental mode |
-| `--json` | bool | Machine-readable JSON output |
-| `--config FILE` | str | Path to config file |
 
 ### `py -m paywallfetcher qa fetch`
 
@@ -105,8 +111,6 @@ Treat this repository as an agent-operated workspace for:
 |---|---|---|
 | `--new-only` | bool | Incremental mode |
 | `--start N` | int | Start from Nth item |
-| `--json` | bool | Machine-readable JSON output |
-| `--config FILE` | str | Path to config file |
 
 ### `py -m paywallfetcher qa browser-fetch`
 

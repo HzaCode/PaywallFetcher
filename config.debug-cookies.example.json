@@ -1,0 +1,8 @@
+{
+  "_comment": "DEBUG-ONLY. Do not commit real cookies. Use env vars (PAYWALLFETCHER_TOKEN or PAYWALLFETCHER_COOKIE_*) for production.",
+
+  "cookies": {
+    "SESSION": "PASTE_YOUR_SESSION_COOKIE_VALUE_HERE",
+    "XSRF-TOKEN": "PASTE_YOUR_XSRF_TOKEN_VALUE_HERE"
+  }
+}
